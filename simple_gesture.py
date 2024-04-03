@@ -104,12 +104,10 @@ class IdleState(State):
 class ShortingState(State):
 
     def __init__(self):
-        self.loop_rate = 1 #[Hz]
         self.motor = digitalio.DigitalInOut(board.D0)
         self.motor.direction = digitalio.Direction.OUTPUT
         self.vibration_time = 8 # [s]
         self.previous_msecs = supervisor.ticks_ms()
-        #pass
 
     @property
     def name(self):
