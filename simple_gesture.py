@@ -10,13 +10,6 @@ from audiopwmio import PWMAudioOut as AudioOut
 
 def rms(array):
    return np.sqrt(np.mean(array ** 2))
-   
-led = digitalio.DigitalInOut(board.LED)
-led.direction = digitalio.Direction.OUTPUT
-
-    
-
-
 
 class State(object):
 
@@ -73,7 +66,10 @@ class IdleState(State):
         self.accel_diff_threshold = 0.5 # [m/s^2]
         self.data_iter = 0
         self.imu.high_pass_filter = True
-        self.previous_value = np.linalg.norm(self.imu.acceleration) 
+        self.previous_value = np.linalg.norm(self.imu.acceleration)
+        self.led = digitalio.DigitalInOut(board.LED)
+        self.led.direction = digitalio.Direction.OUTPUT
+        
 
     @property
     def name(self):
@@ -81,6 +77,8 @@ class IdleState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
+        self.previous_msecs = supervisor.ticks_ms()
+        #self.previous_value = np.linalg.norm(self.imu.acceleration) 
 
     def exit(self, machine):
         State.exit(self, machine)
@@ -96,7 +94,7 @@ class IdleState(State):
             self.data_buffer[self.data_iter] = np.linalg.norm(self.imu.acceleration)
             self.data_iter = (self.data_iter + 1)%(int(self.window_samples_size))
             if(self.data_iter == int(self.window_samples_size)-1):
-                led.value = not led.value
+                self.led.value = not self.led.value
                 accel_difference = np.max([0,rms(self.data_buffer) - self.previous_value])
                 self.previous_value = rms(self.data_buffer)
                 print((accel_difference,accel_difference))
@@ -106,11 +104,11 @@ class IdleState(State):
 class ShortingState(State):
 
     def __init__(self):
-        self.previous_msecs = supervisor.ticks_ms()
         self.loop_rate = 1 #[Hz]
         self.motor = digitalio.DigitalInOut(board.D0)
         self.motor.direction = digitalio.Direction.OUTPUT
         self.vibration_time = 8 # [s]
+        self.previous_msecs = supervisor.ticks_ms()
         #pass
 
     @property
@@ -119,28 +117,17 @@ class ShortingState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
+        self.previous_msecs = supervisor.ticks_ms()
+        self.motor.value = True
 
     def exit(self, machine):
         State.exit(self, machine)
 
 
     def update(self, machine):
-        #if State.update(self, machine): #pausable state (then required condition in State class update method)
-            #if shower(machine, time.monotonic()):
-        #machine.go_to_state('idle')
-
-        start_msecs = supervisor.ticks_ms()
-        self.motor.value = True
-        while(supervisor.ticks_ms()  - start_msecs < (self.vibration_time * 1000)):
-            pass
-        self.motor.value = False
-        machine.go_to_state('idle')
-    
-        #current_msecs = supervisor.ticks_ms()
-        #elapsed_time = (current_msecs - self.previous_msecs)/1000
-        #if(elapsed_time >= (1.0/self.loop_rate)):
-        #    self.previous_msecs = current_msecs
-        #    print('Shorting')
+        if(supervisor.ticks_ms()  - self.previous_msecs > (self.vibration_time * 1000)):
+            self.motor.value = False
+            machine.go_to_state('idle')
                 
 
 
@@ -148,9 +135,7 @@ class ShortingState(State):
 machine = StateMachine()
 machine.add_state(ShortingState())
 machine.add_state(IdleState())
-#print(machine.state)
 machine.go_to_state('idle')
+
 while True:
     machine.update()
-    #print(machine.state.name)
-    #sleep(1)
