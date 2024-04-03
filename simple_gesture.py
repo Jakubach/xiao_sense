@@ -110,6 +110,7 @@ class ShortingState(State):
         self.loop_rate = 1 #[Hz]
         self.motor = digitalio.DigitalInOut(board.D0)
         self.motor.direction = digitalio.Direction.OUTPUT
+        self.vibration_time = 8 # [s]
         #pass
 
     @property
@@ -130,7 +131,7 @@ class ShortingState(State):
 
         start_msecs = supervisor.ticks_ms()
         self.motor.value = True
-        while(supervisor.ticks_ms()  - start_msecs < 8000):
+        while(supervisor.ticks_ms()  - start_msecs < (self.vibration_time * 1000)):
             pass
         self.motor.value = False
         machine.go_to_state('idle')
