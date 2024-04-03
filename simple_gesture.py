@@ -108,9 +108,8 @@ class ShortingState(State):
     def __init__(self):
         self.previous_msecs = supervisor.ticks_ms()
         self.loop_rate = 1 #[Hz]
-        wave_file = open("StreetChicken.wav", "rb")
-        self.wave = WaveFile(wave_file)
-        self.audio = AudioOut(board.A0)
+        self.motor = digitalio.DigitalInOut(board.D0)
+        self.motor.direction = digitalio.Direction.OUTPUT
         #pass
 
     @property
@@ -128,10 +127,12 @@ class ShortingState(State):
         #if State.update(self, machine): #pausable state (then required condition in State class update method)
             #if shower(machine, time.monotonic()):
         #machine.go_to_state('idle')
-        
-        self.audio.play(self.wave)
-        while self.audio.playing:
+
+        start_msecs = supervisor.ticks_ms()
+        self.motor.value = True
+        while(supervisor.ticks_ms()  - start_msecs < 8000):
             pass
+        self.motor.value = False
         machine.go_to_state('idle')
     
         #current_msecs = supervisor.ticks_ms()
