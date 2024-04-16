@@ -7,6 +7,9 @@ from adafruit_lsm6ds import Rate
 from ulab import numpy as np
 from audiocore import WaveFile
 from audiopwmio import PWMAudioOut as AudioOut
+from adafruit_ble import BLERadio
+from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
+from adafruit_ble.services.nordic import UARTService
 
 def rms(array):
    return np.sqrt(np.mean(array ** 2))
@@ -28,7 +31,7 @@ class State(object):
 
     def update(self, machine):
         pass
-    
+
 class StateMachine(object):
 
     def __init__(self):
@@ -59,7 +62,7 @@ class IdleState(State):
         self.imu = IMU()
         self.imu.gyro_data_rate = Rate.RATE_104_HZ
         self.imu.accelerometer_data_rate = Rate.RATE_104_HZ
-        
+
         self.window_time_size = 1.5 # [s]
         self.window_samples_size = self.window_time_size * self.loop_rate # [s] * [1/s]
         self.data_buffer = np.zeros(int(self.window_samples_size))
@@ -69,7 +72,7 @@ class IdleState(State):
         self.previous_value = np.linalg.norm(self.imu.acceleration)
         self.led = digitalio.DigitalInOut(board.LED)
         self.led.direction = digitalio.Direction.OUTPUT
-        
+
 
     @property
     def name(self):
@@ -78,7 +81,7 @@ class IdleState(State):
     def enter(self, machine):
         State.enter(self, machine)
         self.previous_msecs = supervisor.ticks_ms()
-        #self.previous_value = np.linalg.norm(self.imu.acceleration) 
+        #self.previous_value = np.linalg.norm(self.imu.acceleration)
 
     def exit(self, machine):
         State.exit(self, machine)
@@ -108,6 +111,8 @@ class ShortingState(State):
         self.motor.direction = digitalio.Direction.OUTPUT
         self.vibration_time = 8 # [s]
         self.previous_msecs = supervisor.ticks_ms()
+        self.ble = BLERadio()
+        self.uart_connection = None
 
     @property
     def name(self):
@@ -115,18 +120,29 @@ class ShortingState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
-        self.previous_msecs = supervisor.ticks_ms()
-        self.motor.value = True
+        if not self.uart_connection:
+            print("Trying to connect...")
+            for adv in self.ble.start_scan(ProvideServicesAdvertisement):
+                if UARTService in adv.services:
+                    self.uart_connection = self.ble.connect(adv)
+                    break
+            self.ble.stop_scan()
+        else:
+            self.previous_msecs = supervisor.ticks_ms()
+            self.motor.value = True
+
 
     def exit(self, machine):
         State.exit(self, machine)
 
 
     def update(self, machine):
-        if(supervisor.ticks_ms()  - self.previous_msecs > (self.vibration_time * 1000)):
-            self.motor.value = False
-            machine.go_to_state('idle')
-                
+        if self.uart_connection and self.uart_connection.connected:
+            if(supervisor.ticks_ms()  - self.previous_msecs > (self.vibration_time * 1000)):
+                self.motor.value = False
+                machine.go_to_state('idle')
+
+
 
 
 
