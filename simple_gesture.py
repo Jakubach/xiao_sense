@@ -1,18 +1,17 @@
-from time import sleep
+import time
 from seeed_xiao_nrf52840 import IMU
 import board
 import digitalio
-import supervisor
 from adafruit_lsm6ds import Rate
 from ulab import numpy as np
-from audiocore import WaveFile
-from audiopwmio import PWMAudioOut as AudioOut
 from adafruit_ble import BLERadio
 from adafruit_ble.advertising.standard import ProvideServicesAdvertisement
 from adafruit_ble.services.nordic import UARTService
 
+
 def rms(array):
    return np.sqrt(np.mean(array ** 2))
+
 
 class State(object):
 
@@ -38,6 +37,8 @@ class StateMachine(object):
         self.state = None
         self.states = {}
 
+
+
     def add_state(self, state):
         self.states[state.name] = state
 
@@ -51,13 +52,12 @@ class StateMachine(object):
 
     def update(self):
         if self.state:
-            #print('Updating %s' % (self.state.name))
             self.state.update(self)
 
 class IdleState(State):
 
     def __init__(self):
-        self.previous_msecs = supervisor.ticks_ms()
+        self.previous_msecs = time.monotonic()
         self.loop_rate = 50 #[Hz]
         self.imu = IMU()
         self.imu.gyro_data_rate = Rate.RATE_104_HZ
@@ -80,7 +80,7 @@ class IdleState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
-        self.previous_msecs = supervisor.ticks_ms()
+        self.previous_msecs = time.monotonic()
         #self.previous_value = np.linalg.norm(self.imu.acceleration)
 
     def exit(self, machine):
@@ -88,21 +88,25 @@ class IdleState(State):
 
     def update(self, machine):
         #if switch.shaked:
-        current_msecs = supervisor.ticks_ms()
-        elapsed_time = (current_msecs - self.previous_msecs)/1000
+        current_msecs = time.monotonic()
+        elapsed_time = (current_msecs - self.previous_msecs)
         if(elapsed_time >= (1.0/self.loop_rate)):
             # Update timer
             self.previous_msecs = current_msecs
             # Process data
-            self.data_buffer[self.data_iter] = np.linalg.norm(self.imu.acceleration)
-            self.data_iter = (self.data_iter + 1)%(int(self.window_samples_size))
-            if(self.data_iter == int(self.window_samples_size)-1):
-                self.led.value = not self.led.value
-                accel_difference = np.max([0,rms(self.data_buffer) - self.previous_value])
-                self.previous_value = rms(self.data_buffer)
-                print((accel_difference,accel_difference))
-                if(accel_difference > self.accel_diff_threshold):
-                    machine.go_to_state('shorting')
+            try:
+                self.data_buffer[self.data_iter] = np.linalg.norm(self.imu.acceleration)
+                self.data_iter = (self.data_iter + 1)%(int(self.window_samples_size))
+                if(self.data_iter == int(self.window_samples_size)-1):
+                    self.led.value = not self.led.value
+                    accel_difference = np.max([0,rms(self.data_buffer) - self.previous_value])
+                    self.previous_value = rms(self.data_buffer)
+                    print((accel_difference,accel_difference))
+                    if(accel_difference > self.accel_diff_threshold):
+                        machine.go_to_state('shorting')
+            except:
+                print('Exception in idle or shorting state')
+                pass
 
 class ShortingState(State):
 
@@ -110,9 +114,12 @@ class ShortingState(State):
         self.motor = digitalio.DigitalInOut(board.D0)
         self.motor.direction = digitalio.Direction.OUTPUT
         self.vibration_time = 8 # [s]
-        self.previous_msecs = supervisor.ticks_ms()
+        self.previous_msecs = time.monotonic()
         self.ble = BLERadio()
         self.uart_connection = None
+        self.led = digitalio.DigitalInOut(board.LED_BLUE)
+        self.led.direction = digitalio.Direction.OUTPUT
+        self.led.value = True
 
     @property
     def name(self):
@@ -120,16 +127,25 @@ class ShortingState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
-        if not self.uart_connection:
+        if not self.ble.connected:
             print("Trying to connect...")
-            for adv in self.ble.start_scan(ProvideServicesAdvertisement):
-                if UARTService in adv.services:
-                    self.uart_connection = self.ble.connect(adv)
-                    break
+            for adv in self.ble.start_scan(ProvideServicesAdvertisement,timeout = 1):
+                if(adv.complete_name == "Minutnik"):
+                    if UARTService in adv.services:
+                        self.uart_connection = self.ble.connect(adv)  
+                        print("Connected to " + adv.complete_name)
+                        break
             self.ble.stop_scan()
+        if self.ble.connected:
+            uart_service = self.uart_connection[UARTService]
+            msg = "#cs1*" # command shorting 1
+            uart_service.write(msg.encode("utf-8"))
+            print("Shorting command has been sent")
+            self.led.value = False
         else:
-            self.previous_msecs = supervisor.ticks_ms()
-            self.motor.value = True
+            self.led.value = True
+        self.previous_msecs = time.monotonic()
+        self.motor.value = True
 
 
     def exit(self, machine):
@@ -137,10 +153,9 @@ class ShortingState(State):
 
 
     def update(self, machine):
-        if self.uart_connection and self.uart_connection.connected:
-            if(supervisor.ticks_ms()  - self.previous_msecs > (self.vibration_time * 1000)):
-                self.motor.value = False
-                machine.go_to_state('idle')
+        if(time.monotonic()  - self.previous_msecs > self.vibration_time):
+            self.motor.value = False
+            machine.go_to_state('idle')
 
 
 
