@@ -1,5 +1,5 @@
 import time
-from seeed_xiao_nrf52840 import IMU
+from seeed_xiao_nrf52840 import IMU, Battery
 import board
 import digitalio
 from adafruit_lsm6ds import Rate
@@ -57,6 +57,8 @@ class StateMachine(object):
 class IdleState(State):
 
     def __init__(self):
+        self.bat = Battery()
+        self.bat.charge_current = self.bat.CHARGE_100MA
         self.previous_msecs = time.monotonic()
         self.loop_rate = 50 #[Hz]
         self.imu = IMU()
@@ -70,8 +72,15 @@ class IdleState(State):
         self.data_iter = 0
         self.imu.high_pass_filter = True
         self.previous_value = np.linalg.norm(self.imu.acceleration)
-        self.led = digitalio.DigitalInOut(board.LED)
-        self.led.direction = digitalio.Direction.OUTPUT
+        self.led_red = digitalio.DigitalInOut(board.LED_RED)
+        self.led_red.direction = digitalio.Direction.OUTPUT
+        self.led_red.value = True
+        self.led_green = digitalio.DigitalInOut(board.LED_GREEN)
+        self.led_green.direction = digitalio.Direction.OUTPUT
+        self.led_green.value = True
+        self.charged = None
+        self.discharged_battery_voltage = 3.25
+        self.charged_battery_voltage = 3.6
 
 
     @property
@@ -81,11 +90,33 @@ class IdleState(State):
     def enter(self, machine):
         State.enter(self, machine)
         self.previous_msecs = time.monotonic()
+        if(self.charged == None):
+            if(self.bat.voltage >= self.discharged_battery_voltage):
+                self.charged = True
+            else:
+                self.charged = False
         #self.previous_value = np.linalg.norm(self.imu.acceleration)
 
     def exit(self, machine):
         State.exit(self, machine)
 
+    def battery_monitor(self, bat_voltage):
+        if(bat_voltage > self.discharged_battery_voltage and bat_voltage < self.discharged_battery_voltage):
+            if(self.charged):
+                self.led_green.value = False
+                self.led_red.value = True
+            else:
+                self.led_green.value = True
+                self.led_red.value = False
+        elif(bat_voltage >= self.charged_battery_voltage):
+            self.led_green.value = False
+            self.led_red.value = True
+            self.charged = True
+        elif(bat_voltage <= self.discharged_battery_voltage):
+            self.led_green.value = True
+            self.led_red.value = False
+            self.charged = False
+            
     def update(self, machine):
         #if switch.shaked:
         current_msecs = time.monotonic()
@@ -98,7 +129,8 @@ class IdleState(State):
                 self.data_buffer[self.data_iter] = np.linalg.norm(self.imu.acceleration)
                 self.data_iter = (self.data_iter + 1)%(int(self.window_samples_size))
                 if(self.data_iter == int(self.window_samples_size)-1):
-                    self.led.value = not self.led.value
+                    print(f"Voltage: {self.bat.voltage}")
+                    self.battery_monitor(self.bat.voltage)
                     accel_difference = np.max([0,rms(self.data_buffer) - self.previous_value])
                     self.previous_value = rms(self.data_buffer)
                     print((accel_difference,accel_difference))
@@ -117,9 +149,9 @@ class ShortingState(State):
         self.previous_msecs = time.monotonic()
         self.ble = BLERadio()
         self.uart_connection = None
-        self.led = digitalio.DigitalInOut(board.LED_BLUE)
-        self.led.direction = digitalio.Direction.OUTPUT
-        self.led.value = True
+        self.led_blue = digitalio.DigitalInOut(board.LED_BLUE)
+        self.led_blue.direction = digitalio.Direction.OUTPUT
+        self.led_blue.value = True
 
     @property
     def name(self):
@@ -132,7 +164,7 @@ class ShortingState(State):
             for adv in self.ble.start_scan(ProvideServicesAdvertisement,timeout = 1):
                 if(adv.complete_name == "Minutnik"):
                     if UARTService in adv.services:
-                        self.uart_connection = self.ble.connect(adv)  
+                        self.uart_connection = self.ble.connect(adv)
                         print("Connected to " + adv.complete_name)
                         break
             self.ble.stop_scan()
@@ -141,9 +173,9 @@ class ShortingState(State):
             msg = "#cs1*" # command shorting 1
             uart_service.write(msg.encode("utf-8"))
             print("Shorting command has been sent")
-            self.led.value = False
+            self.led_blue.value = False
         else:
-            self.led.value = True
+            self.led_blue.value = True
         self.previous_msecs = time.monotonic()
         self.motor.value = True
 
