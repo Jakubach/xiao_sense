@@ -129,11 +129,11 @@ class IdleState(State):
                 self.data_buffer[self.data_iter] = np.linalg.norm(self.imu.acceleration)
                 self.data_iter = (self.data_iter + 1)%(int(self.window_samples_size))
                 if(self.data_iter == int(self.window_samples_size)-1):
-                    print(f"Voltage: {self.bat.voltage}")
+                    #print(f"Voltage: {self.bat.voltage}")
                     self.battery_monitor(self.bat.voltage)
                     accel_difference = np.max([0,rms(self.data_buffer) - self.previous_value])
                     self.previous_value = rms(self.data_buffer)
-                    print((accel_difference,accel_difference))
+                    #print((accel_difference,accel_difference))
                     if(accel_difference > self.accel_diff_threshold):
                         machine.go_to_state('shorting')
             except:
