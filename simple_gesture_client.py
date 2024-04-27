@@ -73,7 +73,6 @@ class IdleState(State):
     __previous_msecs = time.monotonic()
     
     bat = Battery()
-    bat.charge_current = bat.CHARGE_100MA
     battery_loop_rate = 10 # [Hz]
     battery_window_time_size = 5 # [s]
     battery_window_samples_size = battery_window_time_size * battery_loop_rate # [s] * [1/s]
@@ -91,8 +90,7 @@ class IdleState(State):
         self.imu.gyro_data_rate = Rate.RATE_104_HZ
         self.imu.accelerometer_data_rate = Rate.RATE_104_HZ
         self.imu.high_pass_filter = True
-        
-        #self.bat.charge_current = self.bat.CHARGE_100MA
+        self.bat.charge_current = self.bat.CHARGE_100MA
 
 
 
