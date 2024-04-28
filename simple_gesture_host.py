@@ -113,8 +113,9 @@ class IdleState(State):
             self._ble_connection_flag = True
         if not self.ble.connected:
             self.led_blue.value = True
+            self._ble_connection_flag = False
             
-                    
+            
 
 
 class PausedState(IdleState):
@@ -215,7 +216,8 @@ class ShortingState(IdleState):
         self._ref_voltage = 3.3 #[V]
         self._mosfets = digitalio.DigitalInOut(board.D1)
         self._mosfets.direction = digitalio.Direction.OUTPUT
-        self.previous_msecs = time.monotonic()
+        self.previous_msecs = time.monotonic() 
+        #self.previous_msecs_test = time.monotonic() 
 
     @property
     def name(self):
@@ -239,10 +241,17 @@ class ShortingState(IdleState):
         pass
 
     def update(self, machine):
+        #print(self.activation_time)
+        #current_msecs = time.monotonic()
+        #elapsed = current_msecs - self.previous_msecs_test
         if(time.monotonic()  - self.previous_msecs > self.activation_time):
             self._mosfets.value = False
             if(machine.get_previous_state() != None):
                 machine.go_to_state(machine.get_previous_state())
+        #if(elapsed > 1):
+        #    print(self.activation_time)
+        #    self.previous_msecs_test = current_msecs
+        
 
         
 machine = StateMachine()
