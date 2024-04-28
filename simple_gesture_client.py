@@ -22,6 +22,12 @@ class State(object):
     @classmethod
     def set_uart(cls,uart):
         cls.uart_connection = uart
+    @classmethod
+    def disconnect_uart(cls):
+        if cls.uart_connection != None and cls.uart_connection.connected:
+            cls.uart_connection.disconnect()
+            return True
+        return False
         
     def __init__(self):
         pass
@@ -82,14 +88,14 @@ class IdleState(State):
     __previous_msecs = time.monotonic()
 
     bat = Battery()
-    battery_loop_rate = 0.008 # [Hz] every 125s
+    battery_loop_rate = 0.004 # [Hz] every 250s about 4 minutes
     
     #battery_window_time_size = 5 # [s]
     #battery_window_samples_size = battery_window_time_size * battery_loop_rate # [s] * [1/s]
     #battery_data_buffer = np.zeros(int(battery_window_samples_size))
     #battery_data_iter = 0
     charged_battery_voltage = 4.15
-    discharged_battery_voltage = 3.5
+    discharged_battery_voltage = 3.55
 
     def __init__(self):
         super().__init__()
@@ -183,9 +189,11 @@ class IdleDischargedState(IdleState):
             # Update timer
             self.__previous_msecs_discharged = current_msecs
             # Process data
-            uart_connection = State.get_uart()
-            if uart_connection != None and uart_connection.connected:
-                uart_connection.disconnect()
+            #uart_connection = State.get_uart()
+            #if uart_connection != None and uart_connection.connected:
+            #    uart_connection.disconnect()
+            #    print('Disconnected bluetooth-uart')
+            if(State.disconnect_uart() == True):
                 print('Disconnected bluetooth-uart')
             print("Discharged battery: ", self.bat.voltage)
             if(self.bat.voltage > self.charged_battery_voltage):
@@ -219,9 +227,7 @@ class IdleChargedState(IdleState):
             # Update timer
             self.__previous_msecs_charged = current_msecs
             # Process data
-            uart_connection = State.get_uart()
-            if uart_connection != None and uart_connection.connected:
-                uart_connection.disconnect()
+            if(State.disconnect_uart() == True):
                 print('Disconnected bluetooth-uart')
             print("Charged battery: ", self.bat.voltage)
             if(self.bat.voltage < self.discharged_battery_voltage):
