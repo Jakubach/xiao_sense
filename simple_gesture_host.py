@@ -66,8 +66,8 @@ class IdleState(State):
 
     bat = Battery()
     battery_loop_rate = 0.004 # [Hz] every 250s about 4 minutes
-    charged_battery_voltage = 4.15
-    discharged_battery_voltage = 3.55
+    charged_battery_voltage = 4.1
+    discharged_battery_voltage = 3.65
 
 
 
