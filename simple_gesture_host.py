@@ -50,12 +50,12 @@ class StateMachine(object):
     def update(self):
         if self.state:
             self.state.update(self)
-          
+
 class IdleState(State):
     ble = BLERadio()
     uart = UARTService()
     advertisement = ProvideServicesAdvertisement(uart)
-    
+
 
     loop_rate = 50 #[Hz]
     led_red = digitalio.DigitalInOut(board.LED_RED)
@@ -67,7 +67,7 @@ class IdleState(State):
     battery_loop_rate = 0.004 # [Hz] every 250s about 4 minutes
     charged_battery_voltage = 4.15
     discharged_battery_voltage = 3.55
-    
+
 
 
     def __init__(self):
@@ -82,7 +82,7 @@ class IdleState(State):
         self.led_blue.direction = digitalio.Direction.OUTPUT
         self.led_blue.value = True
         self._ble_connection_flag = False
-        
+
     @property
     def name(self):
         return 'idle'
@@ -111,11 +111,12 @@ class IdleState(State):
                 if s == "#cs1*":
                     machine.go_to_state('shorting')
             self._ble_connection_flag = True
+        #print(self.ble.connected)
         if not self.ble.connected:
             self.led_blue.value = True
             self._ble_connection_flag = False
-            
-            
+
+
 
 
 class PausedState(IdleState):
@@ -137,7 +138,7 @@ class PausedState(IdleState):
 
     def update(self, machine):
         pass
-        
+
 class IdleDischargedState(IdleState):
     def __init__(self):
         self.__previous_msecs_discharged = time.monotonic()
@@ -155,12 +156,12 @@ class IdleDischargedState(IdleState):
     def exit(self, machine):
         pass
 
-        
+
     def update(self, machine):
         super().update(machine)
         current_msecs = time.monotonic()
         elapsed_time = (current_msecs - self.__previous_msecs_discharged)
-        
+
         if(elapsed_time >= (1.0/self.battery_loop_rate)):
             # Update timer
             self.__previous_msecs_discharged = current_msecs
@@ -198,7 +199,7 @@ class IdleChargedState(IdleState):
         super().update(machine)
         current_msecs = time.monotonic()
         elapsed_time = (current_msecs - self.__previous_msecs_charged)
-        
+
         if(elapsed_time >= (1.0/self.battery_loop_rate)):
             # Update timer
             self.__previous_msecs_charged = current_msecs
@@ -208,31 +209,29 @@ class IdleChargedState(IdleState):
             print("Charged battery: ", self.bat.voltage)
             if(self.bat.voltage < self.discharged_battery_voltage):
                 machine.go_to_state('idle-discharged')
-        
+
 class ShortingState(IdleState):
     def __init__(self):
-        self._timing_set = analogio.AnalogIn(board.D0)
-        self._max_timing = 60 # [s]
+        self._timing_set = analogio.AnalogIn(board.D1)
+        self._max_timing = 90 # [s]
         self._ref_voltage = 3.3 #[V]
-        self._mosfets = digitalio.DigitalInOut(board.D1)
+        self._mosfets = digitalio.DigitalInOut(board.D0)
         self._mosfets.direction = digitalio.Direction.OUTPUT
-        self.previous_msecs = time.monotonic() 
-        #self.previous_msecs_test = time.monotonic() 
+        self.previous_msecs = time.monotonic()
+        #self.previous_msecs_test = time.monotonic()
 
     @property
     def name(self):
         return 'shorting'
-        
-    @property
-    def voltage(self) -> float:
-        value = (self._timing_set.value / 65535.0) * 3.3
-        return value
-    
-    @property
-    def activation_time(self) -> float:
-        return (self._max_timing / self._ref_voltage) * self.voltage
-        
 
+    @property
+    def activation_time(self):
+        current_reading = self._timing_set.value
+        if(current_reading > 0 and current_reading < 65535.0):
+            value = (current_reading / 65535.0) * 3.3
+            return (self._max_timing / self._ref_voltage) * value
+        return None
+        
     def enter(self, machine):
         self.previous_msecs = time.monotonic()
         self._mosfets.value = True
@@ -244,16 +243,20 @@ class ShortingState(IdleState):
         #print(self.activation_time)
         #current_msecs = time.monotonic()
         #elapsed = current_msecs - self.previous_msecs_test
-        if(time.monotonic()  - self.previous_msecs > self.activation_time):
-            self._mosfets.value = False
-            if(machine.get_previous_state() != None):
-                machine.go_to_state(machine.get_previous_state())
-        #if(elapsed > 1):
-        #    print(self.activation_time)
-        #    self.previous_msecs_test = current_msecs
-        
+        activ_reading = self.activation_time
+        if(activ_reading != None):
+            if(time.monotonic()  - self.previous_msecs > activ_reading):
+                self._mosfets.value = False
+                if(machine.get_previous_state() != None):
+                    machine.go_to_state(machine.get_previous_state())
+        #if(elapsed > 0.5):
+         #   current_reading = self.voltage
+         #   if(current_reading != None):
+         #       print(current_reading)
+         #   self.previous_msecs_test = current_msecs
 
-        
+
+
 machine = StateMachine()
 machine.add_state(ShortingState())
 machine.add_state(IdleChargedState())
@@ -263,5 +266,5 @@ machine.go_to_state('paused')
 
 while True:
     machine.update()
-    
+
 
