@@ -163,6 +163,7 @@ class PausedState(IdleState):
 
 class IdleDischargedState(IdleState):
     def __init__(self):
+        super().__init__()
         self.__previous_msecs_discharged = time.monotonic()
 
     @property
@@ -192,8 +193,9 @@ class IdleDischargedState(IdleState):
             #    print('Disconnected bluetooth-uart')
             if(State.disconnect_uart() == True):
                 print('Disconnected bluetooth-uart')
-            print("Discharged battery: ", self.bat.voltage)
-            if(self.bat.voltage > self.charged_battery_voltage):
+            bat_voltage = self.bat.voltage
+            print("Discharged battery: ", bat_voltage)
+            if(bat_voltage > self.charged_battery_voltage):
                 machine.go_to_state('idle-charged')
 
 
@@ -224,8 +226,9 @@ class IdleChargedState(IdleState):
             # Process data
             if(State.disconnect_uart() == True):
                 print('Disconnected bluetooth-uart')
-            print("Charged battery: ", self.bat.voltage)
-            if(self.bat.voltage < self.discharged_battery_voltage):
+            bat_voltage = self.bat.voltage
+            print("Charged battery: ", bat_voltage)
+            if(bat_voltage < self.discharged_battery_voltage):
                 machine.go_to_state('idle-discharged')
             
 class ShortingState(State):
@@ -257,11 +260,15 @@ class ShortingState(State):
             self.ble.stop_scan()
         if self.ble.connected:
             uart_connection = State.get_uart()
-            uart_service = uart_connection[UARTService]
-            msg = "#cs1*" # command shorting 1
-            uart_service.write(msg.encode("utf-8"))
-            print("Shorting command has been sent")
-            self.led_blue.value = False
+            if(uart_connection.connected):
+                uart_service = uart_connection[UARTService]
+                msg = "#cs1*" # command shorting 1
+                uart_service.write(msg.encode("utf-8"))
+                print("Shorting command has been sent")
+                self.led_blue.value = False
+            else:
+                # TODO
+                print('Uart disconnected')
         else:
             self.led_blue.value = True
         self.previous_msecs = time.monotonic()
