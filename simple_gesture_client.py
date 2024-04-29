@@ -116,7 +116,6 @@ class IdleState(State):
 
     def enter(self, machine):
         State.enter(self, machine)
-        self.__previous_msecs = time.monotonic()
 
     def exit(self, machine):
         State.exit(self, machine)
@@ -173,8 +172,6 @@ class IdleDischargedState(IdleState):
     def enter(self, machine):
         self.led_green.value = True
         self.led_red.value = False
-        self.__previous_msecs_discharged = time.monotonic()
-        #pass
 
     def exit(self, machine):
         pass
@@ -212,7 +209,6 @@ class IdleChargedState(IdleState):
     def enter(self, machine):
         self.led_green.value = False
         self.led_red.value = True
-        self.__previous_msecs_charged = time.monotonic()
 
     def exit(self, machine):
         pass
@@ -222,7 +218,6 @@ class IdleChargedState(IdleState):
         super().update(machine)
         current_msecs = time.monotonic()
         elapsed_time = (current_msecs - self.__previous_msecs_charged)
-        
         if(elapsed_time >= (1.0/self.battery_loop_rate)):
             # Update timer
             self.__previous_msecs_charged = current_msecs
