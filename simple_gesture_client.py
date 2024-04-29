@@ -14,6 +14,9 @@ def rms(array):
 
 class State(object):
     
+    led_blue = digitalio.DigitalInOut(board.LED_BLUE)
+    led_blue.direction = digitalio.Direction.OUTPUT
+    led_blue.value = True
     # Bugfix: before reading battery voltage a bluetoot-uart should be disconnected
     uart_connection = None
     @classmethod
@@ -43,6 +46,10 @@ class State(object):
         pass
 
     def update(self, machine):
+        if(self.uart_connection != None and self.uart_connection.connected):
+            self.led_blue.value = False
+        else:
+            self.led_blue.value = True
         pass
 
 class StateMachine(object):
@@ -122,6 +129,7 @@ class IdleState(State):
 
     def update(self, machine):
         #if switch.shaked:
+        State.update(self,machine)
         current_msecs = time.monotonic()
         elapsed_time = (current_msecs - self.__previous_msecs)
         if(elapsed_time >= (1.0/self.loop_rate)):
@@ -240,9 +248,7 @@ class ShortingState(State):
         self.vibration_time = 8 # [s]
         self.previous_msecs = time.monotonic()
         self.ble = BLERadio()
-        self.led_blue = digitalio.DigitalInOut(board.LED_BLUE)
-        self.led_blue.direction = digitalio.Direction.OUTPUT
-        self.led_blue.value = True
+        
     @property
     def name(self):
         return 'shorting'
