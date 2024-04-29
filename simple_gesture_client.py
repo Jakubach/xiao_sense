@@ -82,7 +82,7 @@ class IdleState(State):
     window_time_size = 1 # [s]
     window_samples_size = window_time_size * loop_rate # [s] * [1/s]
     data_buffer = np.zeros(int(window_samples_size))
-    accel_diff_threshold = 0.25 # [m/s^2]
+    accel_diff_threshold = 0.35 # [m/s^2]
     data_iter = 0
     previous_value = np.linalg.norm(imu.acceleration)
     __previous_msecs = time.monotonic()
@@ -237,7 +237,7 @@ class ShortingState(State):
         super().__init__()
         self.motor = digitalio.DigitalInOut(board.D0)
         self.motor.direction = digitalio.Direction.OUTPUT
-        self.vibration_time = 12 # [s]
+        self.vibration_time = 8 # [s]
         self.previous_msecs = time.monotonic()
         self.ble = BLERadio()
         self.led_blue = digitalio.DigitalInOut(board.LED_BLUE)
