@@ -60,7 +60,8 @@ class IdleState(State):
     loop_rate = 50 #[Hz]
     led_red = digitalio.DigitalInOut(board.LED_RED)
     led_green = digitalio.DigitalInOut(board.LED_GREEN)
-
+    led_blue = digitalio.DigitalInOut(board.LED_BLUE)
+    
     __previous_msecs = time.monotonic()
 
     bat = Battery()
@@ -78,7 +79,6 @@ class IdleState(State):
         self.led_green.value = True
         self.bat.charge_current = self.bat.CHARGE_100MA
         self.advertisement.complete_name = "Minutnik"
-        self.led_blue = digitalio.DigitalInOut(board.LED_BLUE)
         self.led_blue.direction = digitalio.Direction.OUTPUT
         self.led_blue.value = True
         self._ble_connection_flag = False
@@ -103,6 +103,7 @@ class IdleState(State):
         else:
             if not self._ble_connection_flag:
                 print("Connected")
+                self.ble.stop_advertising()
                 self.led_blue.value = False
                 if self.ble.advertising:
                     self.ble.stop_advertising()
@@ -141,6 +142,7 @@ class PausedState(IdleState):
 
 class IdleDischargedState(IdleState):
     def __init__(self):
+        super().__init__()
         self.__previous_msecs_discharged = time.monotonic()
 
     @property
@@ -150,7 +152,6 @@ class IdleDischargedState(IdleState):
     def enter(self, machine):
         self.led_green.value = True
         self.led_red.value = False
-        self.__previous_msecs_discharged = time.monotonic()
         #pass
 
     def exit(self, machine):
@@ -172,8 +173,9 @@ class IdleDischargedState(IdleState):
             #    print('Disconnected bluetooth-uart')
             #if(State.disconnect_uart() == True):
             #    print('Disconnected bluetooth-uart')
-            print("Discharged battery: ", self.bat.voltage)
-            if(self.bat.voltage > self.charged_battery_voltage):
+            battery_reading = self.bat.voltage
+            print("Discharged battery: ", battery_reading)
+            if(battery_reading > self.charged_battery_voltage):
                 machine.go_to_state('idle-charged')
 
 
@@ -189,7 +191,6 @@ class IdleChargedState(IdleState):
     def enter(self, machine):
         self.led_green.value = False
         self.led_red.value = True
-        self.__previous_msecs_charged = time.monotonic()
 
     def exit(self, machine):
         pass
@@ -199,15 +200,15 @@ class IdleChargedState(IdleState):
         super().update(machine)
         current_msecs = time.monotonic()
         elapsed_time = (current_msecs - self.__previous_msecs_charged)
-
         if(elapsed_time >= (1.0/self.battery_loop_rate)):
             # Update timer
             self.__previous_msecs_charged = current_msecs
             # Process data
             #if(State.disconnect_uart() == True):
             #    print('Disconnected bluetooth-uart')
-            print("Charged battery: ", self.bat.voltage)
-            if(self.bat.voltage < self.discharged_battery_voltage):
+            battery_reading = self.bat.voltage
+            print("Charged battery: ", battery_reading)
+            if(battery_reading < self.discharged_battery_voltage):
                 machine.go_to_state('idle-discharged')
 
 class ShortingState(IdleState):
