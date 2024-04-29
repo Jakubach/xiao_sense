@@ -101,8 +101,8 @@ class IdleState(State):
     #battery_window_samples_size = battery_window_time_size * battery_loop_rate # [s] * [1/s]
     #battery_data_buffer = np.zeros(int(battery_window_samples_size))
     #battery_data_iter = 0
-    charged_battery_voltage = 4.15
-    discharged_battery_voltage = 3.55
+    charged_battery_voltage = 4.1
+    discharged_battery_voltage = 3.65
 
     def __init__(self):
         super().__init__()
